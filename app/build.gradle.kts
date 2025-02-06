@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.poc_google_webrtc"
-        minSdk = 24
+        minSdk = 31
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -52,6 +52,8 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(files("libs/libwebrtc.aar"))
     implementation(libs.okhttp)
+    implementation(libs.ktor.client.android)
+    implementation( libs.ktor.client.websockets)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
