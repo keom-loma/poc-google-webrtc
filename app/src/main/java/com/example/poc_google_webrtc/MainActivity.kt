@@ -17,6 +17,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.poc_google_webrtc.ui.theme.PocgooglewebrtcTheme
 import com.example.poc_google_webrtc.utils.SignalingClient
 import com.example.poc_google_webrtc.utils.WebRTCManager
+import com.example.poc_google_webrtc.video_player.VideoPlayerScreen
 import org.webrtc.SurfaceViewRenderer
 
 class MainActivity : ComponentActivity() {
@@ -47,10 +48,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             PocgooglewebrtcTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    MainScreen(
+                    VideoPlayerScreen(
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                    /*MainScreen(
                         modifier = Modifier.padding(innerPadding),
                         context = this
-                    )
+                    )*/
                 }
             }
         }
