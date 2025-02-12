@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebView Example</title>
+    <style>
+        /* Style for the container */
+        .container {
+            display: flex;
+            flex-direction: column; /* Stack children vertically */
+            align-items: center; /* Center children horizontally */
+            gap: 10px; /* Space between elements */
+            padding: 20px; /* Padding around the container */
+        }
+
+        /* Style for the TextField */
+        #inputField {
+            width: 80%; /* Set width of the TextField */
+            padding: 10px; /* Padding inside the TextField */
+            font-size: 16px; /* Font size */
+            border: 1px solid #ccc; /* Border color */
+            border-radius: 5px; /* Rounded corners */
+        }
+
+        /* Style for the button */
+        #myButton {
+            background-color: #4CAF50; /* Green background */
+            color: white; /* White text */
+            padding: 10px 20px; /* Padding */
+            border: none; /* No border */
+            border-radius: 5px; /* Rounded corners */
+            cursor: pointer; /* Pointer cursor on hover */
+            font-size: 16px; /* Font size */
+            width: 80%; /* Set width of the button */
+        }
+
+        /* Change button color on hover */
+        #myButton:hover {
+            background-color: #45a049; /* Darker green */
+        }
+    </style>
+    <script type="text/javascript">
+        // Function to receive data from Android
+        function receiveDataFromApp(data) {
+            // Populate the TextField with data from Android
+            document.getElementById('inputField').value = data;
+        }
+    </script>
+    <!--<script type="text/javascript">
+        // Function to receive data from Android
+        function receiveDataFromApp(data) {
+            // Populate the TextField with data from Android
+            document.getElementById('inputField').value = data;
+        }
+
+        // Function to handle TextField input events
+        function handleInput(event) {
+            var inputValue = event.target.value;
+            console.log("Input value:", inputValue);
+
+            // Send data back to Android (optional)
+            Android.showToast(inputValue);
+        }
+    </script>-->
+</head>
+<body>
+<div class="container">
+    <h1>Data from Android Side</h1>
+    <input type="text" id="inputField" oninput="handleInput(event)"/>
+</div>
+<!--<button id="myButton" onclick="handleButtonClick()">Submit</button>-->
+</body>
+</html>

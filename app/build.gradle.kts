@@ -54,6 +54,15 @@ dependencies {
     implementation (libs.exoplayer)
     implementation (libs.androidx.media3.exoplayer.v111)
     implementation (libs.androidx.media3.ui.v111)
+    implementation(libs.atomicfu)
+    implementation (libs.ktor.client.cio.v221)
+    implementation (libs.kotlinx.serialization.json)
+
+    implementation (libs.kotlinx.coroutines.android)
+    implementation (libs.ktor.client.core)
+    implementation (libs.ktor.client.cio)
+    implementation (libs.ktor.client.json)
+    implementation (libs.ktor.client.serialization)
 
     implementation(libs.okhttp)
     implementation(libs.ktor.client.android)
