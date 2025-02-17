@@ -16,7 +16,8 @@ import androidx.media3.exoplayer.ExoPlayer
 @Composable
 fun VideoPlayerScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val dataToPass = remember { "https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888" }
+    val dataToPass =
+        remember { "https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888" }
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             val mediaItem =
@@ -51,6 +52,7 @@ fun VideoPlayerScreen(modifier: Modifier = Modifier) {
                 settings.loadWithOverviewMode = false
 
                 loadUrl("https://test-webrtc-jupyter.vercel.app/")
+                // loadUrl("http://local.mystream.test:8099/rtc/v1/whep/?app=live&stream=livestream")
                 addJavascriptInterface(WebAppInterface(context), dataToPass)
 
 
@@ -58,7 +60,6 @@ fun VideoPlayerScreen(modifier: Modifier = Modifier) {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
                         view?.evaluateJavascript("receiveDataFromApp('$dataToPass')", null)
-                        // Inject JavaScript to handle button clicks
                         view?.evaluateJavascript(
                             """
                         document.getElementById('myButton').addEventListener('click', function() {
@@ -77,11 +78,9 @@ fun VideoPlayerScreen(modifier: Modifier = Modifier) {
     )
 }
 
-// JavaScript interface to allow communication between Android and JavaScript
 class WebAppInterface(private val context: android.content.Context) {
     @JavascriptInterface
     fun handleButtonClick(inputValue: String) {
-        // Handle button click in Android
         android.widget.Toast.makeText(
             context,
             "Button clicked! Input: $inputValue",

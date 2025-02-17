@@ -57,6 +57,7 @@ dependencies {
     implementation(libs.atomicfu)
     implementation (libs.ktor.client.cio.v221)
     implementation (libs.kotlinx.serialization.json)
+    implementation (libs.socket.io.client)
 
     implementation (libs.kotlinx.coroutines.android)
     implementation (libs.ktor.client.core)
