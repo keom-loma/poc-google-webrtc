@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -29,7 +30,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.poc_google_webrtc.ui.theme.PocgooglewebrtcTheme
-import com.example.poc_google_webrtc.utils.CustomPeerConnectionObserver
 import com.example.poc_google_webrtc.utils.WebRTCManager
 import okhttp3.Call
 import okhttp3.Callback
@@ -42,7 +42,6 @@ import okio.IOException
 import org.json.JSONException
 import org.json.JSONObject
 import org.webrtc.DataChannel
-import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
 import org.webrtc.IceCandidate
 import org.webrtc.MediaConstraints
@@ -50,7 +49,6 @@ import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnection.IceServer
 import org.webrtc.PeerConnectionFactory
-import org.webrtc.RtpReceiver
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 import org.webrtc.SurfaceViewRenderer
@@ -58,22 +56,25 @@ import org.webrtc.VideoTrack
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var webRTCManager: WebRTCManager
 
     private lateinit var eglBase: EglBase
 
-    // private lateinit var surfaceViewRenderer: SurfaceViewRenderer
     private var peerConnection: PeerConnection? = null
     private var remoteRenderer: VideoTrack? = null
+    private var peerConnectionFactory: PeerConnectionFactory? = null
+
     private val iceServers = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
     )
-
 
     private var localPeer: PeerConnection? = null
 
     private var localVideoTrack: VideoTrack? = null
 
+    companion object {
+        var streamUrl =
+            "https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,30 +84,235 @@ class MainActivity : ComponentActivity() {
         val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
         windowInsetsController.isAppearanceLightStatusBars = true // Dark icons
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
+        initializePeerConnectionFactory()
         setContent {
             PocgooglewebrtcTheme {
-                MainScreen(
-                    modifier = Modifier
-                        .systemBarsPadding(),
-                    context = this@MainActivity
+                startButton(
+                    onClick = {
+                        generateSdpOffer()
+                    }
                 )
-
-                /* Box(
-                     modifier = Modifier
-                         .fillMaxSize()
-                         .systemBarsPadding()
-                         .background(color = Color.Red),
-                     contentAlignment = Alignment.Center
-                 ) {
-                     Text("Center Content")
-                 }*/
             }
         }
+    }
+
+    private fun initializePeerConnectionFactory() {
+        // Create initialization options for the PeerConnectionFactory
+        val options = PeerConnectionFactory.Options()
+
+        // Initialize WebRTC PeerConnectionFactory
+        val initializer = PeerConnectionFactory.initialize(
+            PeerConnectionFactory.InitializationOptions.builder(applicationContext)
+                .setEnableInternalTracer(true)
+                .createInitializationOptions()
+        )
+
+        // Create PeerConnectionFactory once initialization is done
+        peerConnectionFactory = PeerConnectionFactory.builder()
+            .setOptions(options)
+            .createPeerConnectionFactory()
 
 
-        //  startStreaming(whepUrl = "https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888")
-        //  startStreaming(whepUrl = "http://local.mystream.test:8099/rtc/v1/whep/?app=live&stream=livestream")
+        if (peerConnectionFactory == null) {
+            println("PeerConnectionFactory initialization failed.")
+            return
+        } else {
+            println("PeerConnectionFactory initialized successfully.")
+        }
+    }
+
+    private fun generateSdpOffer() {
+        println("generateSdpOffer running...")
+        // Ensure peerConnectionFactory is initialized before use
+        if (peerConnectionFactory == null) {
+            Log.e("SDP Offer", "PeerConnectionFactory is not initialized!")
+            return
+        }
+        val mediaConstraints = MediaConstraints().apply {
+            // Add any specific constraints here if necessary
+            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
+            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
+        }
+
+        val config = PeerConnection.RTCConfiguration(emptyList()) // Customize as needed
+        peerConnection =
+            peerConnectionFactory?.createPeerConnection(config, object : PeerConnection.Observer {
+                override fun onIceCandidate(candidate: IceCandidate?) {}
+                override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {}
+
+                override fun onAddStream(stream: MediaStream?) {}
+                override fun onRemoveStream(stream: MediaStream?) {}
+                override fun onDataChannel(channel: DataChannel?) {}
+                override fun onRenegotiationNeeded() {}
+                override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {}
+                override fun onIceConnectionReceivingChange(p0: Boolean) {}
+
+                override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState?) {}
+                override fun onSignalingChange(newState: PeerConnection.SignalingState?) {}
+            })!!
+
+        // Initialize the PeerConnection
+        peerConnection =
+            peerConnectionFactory?.createPeerConnection(config, object : PeerConnection.Observer {
+                override fun onIceCandidate(candidate: org.webrtc.IceCandidate?) {
+                    // Handle ICE candidate
+                    candidate?.let {
+                        // send to signaling server
+                        println("ICE Candidate: $it")
+                    }
+                }
+
+                override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {
+                    // Handle ICE candidates removed
+                }
+
+                override fun onAddStream(stream: org.webrtc.MediaStream?) {
+                    // Handle added stream (e.g., remote media stream)
+                }
+
+                override fun onRemoveStream(stream: org.webrtc.MediaStream?) {
+                    // Handle removed stream
+                }
+
+                override fun onDataChannel(channel: org.webrtc.DataChannel?) {
+                    // Handle data channel events
+                }
+
+                override fun onRenegotiationNeeded() {
+                    // Handle renegotiation if needed
+                }
+
+                override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {
+                    // Handle ICE connection state change
+                }
+
+                override fun onIceConnectionReceivingChange(p0: Boolean) {
+                    // Handle ICE connection receiving change
+                }
+
+                override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState?) {
+                    // Handle ICE gathering state change
+                }
+
+                override fun onSignalingChange(newState: PeerConnection.SignalingState?) {
+                    // Handle signaling state change
+                }
+            }) ?: run {
+                Log.e("SDP Offer", "Failed to create PeerConnection")
+                return
+            }
+
+        // Create SDP offer
+        peerConnection?.createOffer(object : SdpObserver {
+            override fun onCreateSuccess(sdp: SessionDescription?) {
+                sdp?.let {
+                    // Set local description
+                    println("SDP Offer-=-=-: ${it.description}")
+                    Log.e("SDp form log", "${it.description}")
+                    peerConnection?.setLocalDescription(this, it)
+
+                    // Log and display the SDP offer
+                    val sdpOffer = it.description
+                    // sdpOfferTextView.text = sdpOffer
+
+                    println("SDP Offer: $sdpOffer")
+                    println("SDP Offer type: ${it.type}")
+
+                    sendOfferToServer(it)
+
+                    // Send the SDP offer to the signaling server
+                    // sendSdpOfferToServer(sdpOffer)
+                }
+            }
+
+            override fun onCreateFailure(error: String?) {
+                Log.e("SDP Offer", "Error creating SDP offer: $error")
+            }
+
+            override fun onSetSuccess() {}
+
+            override fun onSetFailure(error: String?) {
+                Log.e("SDP Offer", "Error setting SDP: $error")
+            }
+        }, mediaConstraints)
+    }
+
+    private fun sendOfferToServer(it: SessionDescription) {
+        Log.e("SOCKET", "$it")
+        val client = OkHttpClient()
+        val request = Request.Builder()
+            .url(streamUrl)
+            .header("Content-Type", "application/sdp")
+            .post(it.description.toString().toRequestBody())
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                Log.e("WebRTC", "fetchSDPFromWHEP: $response")
+
+                response.body?.string()?.let { sdpResponse ->
+                    Log.e("WebRTC", sdpResponse)
+                } ?: {
+                    Log.e("WebRTC", "Empty SDP response")
+                }
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("WebRTC", "Failed to fetch SDP: ${e.message}")
+            }
+        })
+    }
+
+    @Composable
+    fun startButton(
+        onClick: () -> Unit
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .height(50.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Button(onClick = {
+                onClick()
+            }) {
+                Text(text = "Generate Offer")
+            }
+        }
+    }
+
+    @Composable
+    fun RemoteVideoView(
+        webRTCManager: WebRTCManager
+    ) {
+        AndroidView(
+            factory = { context ->
+                SurfaceViewRenderer(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    webRTCManager.remoteSurfaceViewRenderer = this
+                }
+            }, modifier = Modifier.fillMaxSize()
+        )
+    }
+
+    open class SimpleSdpObserver : SdpObserver {
+        override fun onCreateSuccess(description: SessionDescription?) {
+            println("WebRTC-=error:::::Connected onCreateSuccess")
+        }
+
+        override fun onSetSuccess() {
+            println("WebRTC-=error:::::Connected onSetSuccess")
+        }
+
+        override fun onCreateFailure(error: String?) {
+            println("WebRTC-=error:::::Connected to onCreateFailure")
+        }
+
+        override fun onSetFailure(error: String?) {
+            println("WebRTC-=error:::::Connected to onSetFailure")
+        }
     }
 
     private fun startStreaming(whepUrl: String) {
@@ -155,7 +361,7 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 val requestBody = answerJson.toString()
-                                    .toRequestBody("application/json".toMediaTypeOrNull())
+                                    .toRequestBody("application/sdp".toMediaTypeOrNull())
 
                                 val answerRequest =
                                     Request.Builder().url(whepUrl).post(requestBody).build()
@@ -182,7 +388,6 @@ class MainActivity : ComponentActivity() {
             }
         })
     }
-
 
     private fun createPeerConnection() {
         val options = PeerConnectionFactory.Options()
@@ -221,9 +426,6 @@ class MainActivity : ComponentActivity() {
 
                     override fun onAddStream(stream: MediaStream?) {
                         stream?.videoTracks?.forEach { videoTrack ->
-                            if (videoTrack != null) {
-                                remoteRenderer = videoTrack
-                            }
                             println("onAddStream: $videoTrack")
                         }
                     }
@@ -274,136 +476,7 @@ class MainActivity : ComponentActivity() {
         }
 
     }
-
-    private fun createOffer() {
-        val peerConnectionFactory = PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(
-                DefaultVideoEncoderFactory(
-                    eglBase.eglBaseContext,
-                    true,
-                    true
-                )
-            )
-            .createPeerConnectionFactory()
-
-
-        peerConnection = peerConnectionFactory?.createPeerConnection(
-            iceServers,
-            object : CustomPeerConnectionObserver() {
-                override fun onAddTrack(
-                    receiver: RtpReceiver?, mediaStreams: Array<out MediaStream>?
-                ) {
-                    mediaStreams?.firstOrNull()?.videoTracks?.firstOrNull()?.let { videoTrack ->
-                        remoteRenderer = videoTrack
-                        // videoTrack.addSink(surfaceViewRenderer)
-                    }
-                }
-            })
-
-
-        if (peerConnection != null) {
-            peerConnection!!.createOffer(object : SdpObserver {
-                override fun onCreateSuccess(sessionDescription: SessionDescription?) {
-                    peerConnection!!.setLocalDescription(this, sessionDescription)
-                }
-
-                override fun onSetSuccess() {}
-                override fun onCreateFailure(error: String?) {}
-                override fun onSetFailure(error: String?) {}
-            }, MediaConstraints())
-        } else {
-            Log.e("createOffer", "Failed to create PeerConnection.")
-        }
-    }
-
-    @Composable
-    fun MainScreen(modifier: Modifier = Modifier, context: Context) {
-        var streamUrl by remember { mutableStateOf("https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888") }
-        var isPlaying by remember { mutableStateOf(false) }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    top = 36.dp, start = 16.dp, end = 16.dp
-                )
-        ) {
-            TextField(
-                value = streamUrl,
-                onValueChange = { streamUrl = it },
-                label = { Text("Enter Stream URL") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Button(
-                onClick = {
-                    isPlaying = true
-                    startStreaming(streamUrl)
-                    // startWebRTC(streamUrl)
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(text = "Start Streaming")
-            }
-
-            if (isPlaying) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            color = Color.Transparent
-                        )
-                        .padding(
-                            bottom = 50.dp
-                        )
-                ) {
-                    AndroidView(
-                        factory = { context ->
-                            SurfaceViewRenderer(context).apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                                remoteRenderer
-                                //  webRTCManager.remoteSurfaceViewRenderer = this
-                            }
-                        }, modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-        }
-    }
-
-
-    @Composable
-    fun RemoteVideoView(
-        webRTCManager: WebRTCManager
-    ) {
-        AndroidView(
-            factory = { context ->
-                SurfaceViewRenderer(context).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    webRTCManager.remoteSurfaceViewRenderer = this
-                }
-            }, modifier = Modifier.fillMaxSize()
-        )
-    }
-
-    open class SimpleSdpObserver : SdpObserver {
-        override fun onCreateSuccess(description: SessionDescription?) {
-            println("WebRTC-=error:::::Connected onCreateSuccess")
-        }
-
-        override fun onSetSuccess() {
-            println("WebRTC-=error:::::Connected onSetSuccess")
-        }
-
-        override fun onCreateFailure(error: String?) {
-            println("WebRTC-=error:::::Connected to onCreateFailure")
-        }
-
-        override fun onSetFailure(error: String?) {
-            println("WebRTC-=error:::::Connected to onSetFailure")
-        }
-    }
 }
+
+
+
