@@ -39,6 +39,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.IOException
+import okio.use
 import org.json.JSONException
 import org.json.JSONObject
 import org.webrtc.DataChannel
@@ -48,6 +49,12 @@ import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
 import org.webrtc.PeerConnection.IceServer
+import org.webrtc.PeerConnection.SignalingState.CLOSED
+import org.webrtc.PeerConnection.SignalingState.HAVE_LOCAL_OFFER
+import org.webrtc.PeerConnection.SignalingState.HAVE_LOCAL_PRANSWER
+import org.webrtc.PeerConnection.SignalingState.HAVE_REMOTE_OFFER
+import org.webrtc.PeerConnection.SignalingState.HAVE_REMOTE_PRANSWER
+import org.webrtc.PeerConnection.SignalingState.STABLE
 import org.webrtc.PeerConnectionFactory
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
@@ -56,15 +63,12 @@ import org.webrtc.VideoTrack
 
 class MainActivity : ComponentActivity() {
 
-
-    private lateinit var eglBase: EglBase
-
     private var peerConnection: PeerConnection? = null
     private var remoteRenderer: VideoTrack? = null
     private var peerConnectionFactory: PeerConnectionFactory? = null
 
     private val iceServers = listOf(
-        PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
+        IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
     )
 
     private var localPeer: PeerConnection? = null
@@ -84,12 +88,11 @@ class MainActivity : ComponentActivity() {
         val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
         windowInsetsController.isAppearanceLightStatusBars = true // Dark icons
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        initializePeerConnectionFactory()
         setContent {
             PocgooglewebrtcTheme {
                 startButton(
                     onClick = {
-                        generateSdpOffer()
+                        initializePeerConnectionFactory()
                     }
                 )
             }
@@ -118,6 +121,7 @@ class MainActivity : ComponentActivity() {
             return
         } else {
             println("PeerConnectionFactory initialized successfully.")
+            generateSdpOffer()
         }
     }
 
@@ -134,13 +138,24 @@ class MainActivity : ComponentActivity() {
             mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
         }
 
-        val config = PeerConnection.RTCConfiguration(emptyList()) // Customize as needed
+        val config = PeerConnection.RTCConfiguration(iceServers) // Customize as needed
+        // Initialize the PeerConnection
         peerConnection =
             peerConnectionFactory?.createPeerConnection(config, object : PeerConnection.Observer {
                 override fun onIceCandidate(candidate: IceCandidate?) {}
                 override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {}
 
-                override fun onAddStream(stream: MediaStream?) {}
+                override fun onAddStream(stream: MediaStream?) {
+                    stream?.let {mediaStream->
+                        val videoTrack = mediaStream.videoTracks.firstOrNull()
+                        videoTrack?.let { vdeo ->
+                            Log.d("WebRTC-=-=-=-=-=-=", "Remote Video Track added: ${vdeo}")
+                            // Set up the remote video renderer
+                            remoteRenderer?.addSink{vdeo}
+                        }
+                    }
+                    println("onAddStream on method generate offer: ${stream?.videoTracks}: ")
+                }
                 override fun onRemoveStream(stream: MediaStream?) {}
                 override fun onDataChannel(channel: DataChannel?) {}
                 override fun onRenegotiationNeeded() {}
@@ -148,93 +163,62 @@ class MainActivity : ComponentActivity() {
                 override fun onIceConnectionReceivingChange(p0: Boolean) {}
 
                 override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState?) {}
-                override fun onSignalingChange(newState: PeerConnection.SignalingState?) {}
-            })!!
-
-        // Initialize the PeerConnection
-        peerConnection =
-            peerConnectionFactory?.createPeerConnection(config, object : PeerConnection.Observer {
-                override fun onIceCandidate(candidate: org.webrtc.IceCandidate?) {
-                    // Handle ICE candidate
-                    candidate?.let {
-                        // send to signaling server
-                        println("ICE Candidate: $it")
-                    }
-                }
-
-                override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {
-                    // Handle ICE candidates removed
-                }
-
-                override fun onAddStream(stream: org.webrtc.MediaStream?) {
-                    // Handle added stream (e.g., remote media stream)
-                }
-
-                override fun onRemoveStream(stream: org.webrtc.MediaStream?) {
-                    // Handle removed stream
-                }
-
-                override fun onDataChannel(channel: org.webrtc.DataChannel?) {
-                    // Handle data channel events
-                }
-
-                override fun onRenegotiationNeeded() {
-                    // Handle renegotiation if needed
-                }
-
-                override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {
-                    // Handle ICE connection state change
-                }
-
-                override fun onIceConnectionReceivingChange(p0: Boolean) {
-                    // Handle ICE connection receiving change
-                }
-
-                override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState?) {
-                    // Handle ICE gathering state change
-                }
-
                 override fun onSignalingChange(newState: PeerConnection.SignalingState?) {
-                    // Handle signaling state change
+                    Log.e("SignalState", "onSignalStateChange ${newState?.name}")
                 }
-            }) ?: run {
-                Log.e("SDP Offer", "Failed to create PeerConnection")
-                return
-            }
+            })!!
 
         // Create SDP offer
         peerConnection?.createOffer(object : SdpObserver {
             override fun onCreateSuccess(sdp: SessionDescription?) {
-                sdp?.let {
-                    // Set local description
-                    println("SDP Offer-=-=-: ${it.description}")
-                    Log.e("SDp form log", "${it.description}")
-                    peerConnection?.setLocalDescription(this, it)
+                val modifiedSdp = sdp?.description?.replace("m=video 0 UDP/TLS/RTP/SAVPF 0",
+                    "m=video 9 UDP/TLS/RTP/SAVPF 102")
 
-                    // Log and display the SDP offer
-                    val sdpOffer = it.description
-                    // sdpOfferTextView.text = sdpOffer
+                //m=video 9 UDP/TLS/RTP/SAVPF 96 97 98 99 100 101 35 36 37 38 102 103 104 105 106 107 108 109 127 125 39 40 41 42 43 44 45 46 47 48 112 113 114 115 116 117 118 49
+                // a=rtpmap:100 VP8/90000
+                // a=rtpmap:101 VP9/90000
+                val codecLines = """
+                    a=rtpmap:102 H264/90000
+                """.trimIndent()
 
-                    println("SDP Offer: $sdpOffer")
-                    println("SDP Offer type: ${it.type}")
+                // Append the codec lines to the SDP
+                val finalSdp = modifiedSdp + codecLines
+                println("finaSdp-=-=-=-=$finalSdp")
+                Log.e("TAG", "finaSdp-=-=-=-=${finalSdp}")
+                val modifiedSessionDescription = SessionDescription(SessionDescription.Type.OFFER, finalSdp)
+                //val resultSetLocalDescription = peerConnection?.setLocalDescription(this, modifiedSessionDescription)
 
-                    sendOfferToServer(it)
+                peerConnection?.setLocalDescription(modifiedSessionDescription.let {
+                    object : SdpObserver{
+                    override fun onCreateSuccess(p0: SessionDescription?) {
+                        println("resultSetLocalDescription onCreateSuccess: $p0")
+                    }
+                    override fun onSetSuccess() {
+                        println("resultSetLocalDescription onSetSuccess:")
+                    }
+                    override fun onCreateFailure(p0: String?) {
+                        println("resultSetLocalDescription onCreateFailure: $p0")
+                    }
+                    override fun onSetFailure(p0: String?) {
+                        println("resultSetLocalDescription onSetFailure: $p0")
+                    }
 
-                    // Send the SDP offer to the signaling server
-                    // sendSdpOfferToServer(sdpOffer)
                 }
-            }
+                })
 
+                sendOfferToServer(modifiedSessionDescription)
+            }
             override fun onCreateFailure(error: String?) {
                 Log.e("SDP Offer", "Error creating SDP offer: $error")
             }
-
             override fun onSetSuccess() {}
 
             override fun onSetFailure(error: String?) {
                 Log.e("SDP Offer", "Error setting SDP: $error")
             }
         }, mediaConstraints)
+
+        println("mediaConstraints: $mediaConstraints")
     }
 
     private fun sendOfferToServer(it: SessionDescription) {
@@ -248,13 +232,26 @@ class MainActivity : ComponentActivity() {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                Log.e("WebRTC", "fetchSDPFromWHEP: $response")
+                Log.e("WebRTC", "fetchSDPFromWHEP-=-=: ${response.body?.toString()}")
+                val sdpResponse = response.body.toString()
+                response.body.use {responseBody ->
+                    val sdpResponse = responseBody?.string()
+                    Log.e("WebRTC", "Response Body: $sdpResponse")
+                    val sessionDescription = SessionDescription(SessionDescription.Type.ANSWER, sdpResponse)
+                    println("Information on sessionDescription: ${sessionDescription.description}")
+                    setRemoteDescription(sessionDescription)
 
-                response.body?.string()?.let { sdpResponse ->
-                    Log.e("WebRTC", sdpResponse)
+                }
+                println("Information on Response: $sdpResponse")
+               //  setRemoteDescription(SessionDescription(SessionDescription.Type.ANSWER, response.toString()))
+                /*response.body?.string()?.let { sdpResponse ->
+                    Log.e("WebRTC 900909090", sdpResponse)
+
+                    // setRemoteDescription(SessionDescription(SessionDescription.Type.ANSWER, sdpResponse))
+
                 } ?: {
                     Log.e("WebRTC", "Empty SDP response")
-                }
+                }*/
             }
 
             override fun onFailure(call: Call, e: IOException) {
@@ -263,6 +260,95 @@ class MainActivity : ComponentActivity() {
         })
     }
 
+    private fun setRemoteDescription(sessionDescription: SessionDescription) {
+        println( "Received SDP setRemoteDescription: ${sessionDescription.description}")
+        val signalingState = peerConnection?.signalingState()
+        println( "signalingState: ${signalingState?.name}")
+       /* if (signalingState == PeerConnection.SignalingState.STABLE) {
+            Log.e("WebRTC", "STABLE state detected. Need to create an offer before setting remote description.")
+            createAndSetLocalOffer {
+                Log.e("WebRTC", "Local offer set. Now setting remote description.")
+                peerConnection?.setRemoteDescription(object : SdpObserver {
+                    override fun onSetSuccess() {
+                        Log.e("WebRTC", "Remote description set successfully")
+                    }
+
+                    override fun onSetFailure(error: String?) {
+                        Log.e("WebRTC", "Failed to set remote description: $error")
+                    }
+
+                    override fun onCreateSuccess(sdp: SessionDescription?) {}
+                    override fun onCreateFailure(error: String?) {}
+                }, sessionDescription)
+            }
+        } else if (signalingState == PeerConnection.SignalingState.HAVE_LOCAL_OFFER) {
+            Log.e("WebRTC", "Local offer already exists! Proceeding to set remote description.")
+            peerConnection?.setRemoteDescription(object : SdpObserver {
+                override fun onSetSuccess() {
+                    Log.e("WebRTC", "Remote description set successfully")
+                }
+
+                override fun onSetFailure(error: String?) {
+                    Log.e("WebRTC", "Failed to set remote description: $error")
+                }
+
+                override fun onCreateSuccess(sdp: SessionDescription?) {}
+                override fun onCreateFailure(error: String?) {}
+            }, sessionDescription)
+        } else {
+            Log.e("WebRTC", "Skipping setRemoteDescription: Invalid signaling state: $signalingState")
+        }*/
+      peerConnection?.let {
+            Log.e("SDP Answer", "PeerConnection State: ${it.signalingState()}")
+            it.setRemoteDescription(object : SdpObserver {
+                override fun onSetSuccess() {
+                    Log.e("SDP Answer onSetSuccess", "Remote description set successfully")
+                }
+
+                override fun onSetFailure(error: String?) {
+                    Log.e("SDP Answer onSetFailure", "Failed to set remote description onSetFailure: $error")
+                }
+
+                override fun onCreateSuccess(sdp: SessionDescription?) {
+                    Log.e("SDP Answer onCreateSuccess", "Failed to set remote description onCreateSuccess: $sdp")
+                }
+
+                override fun onCreateFailure(error: String?) {
+                    Log.e("SDP Answer onCreateFailure", "Failed to set remote description onCreateFailure: $error")
+                }
+            }, sessionDescription)
+        } ?: Log.e("SDP Answer", "PeerConnection is null!")
+    }
+    private fun createAndSetLocalOffer(callback: () -> Unit) {
+        val constraints = MediaConstraints()
+
+        peerConnection?.createOffer(object : SdpObserver {
+            override fun onCreateSuccess(sdp: SessionDescription) {
+                Log.e("WebRTC", "Offer created: ${sdp.description}")
+
+                peerConnection?.setLocalDescription(object : SdpObserver {
+                    override fun onSetSuccess() {
+                        Log.e("WebRTC", "Local offer set successfully")
+                        callback() // Proceed to set the remote description
+                    }
+
+                    override fun onSetFailure(error: String?) {
+                        Log.e("WebRTC", "Failed to set local offer: $error")
+                    }
+
+                    override fun onCreateSuccess(sdp: SessionDescription?) {}
+                    override fun onCreateFailure(error: String?) {}
+                }, sdp)
+            }
+
+            override fun onCreateFailure(error: String?) {
+                Log.e("WebRTC", "Offer creation failed: $error")
+            }
+
+            override fun onSetSuccess() {}
+            override fun onSetFailure(error: String?) {}
+        }, constraints)
+    }
     @Composable
     fun startButton(
         onClick: () -> Unit
@@ -295,186 +381,6 @@ class MainActivity : ComponentActivity() {
                 }
             }, modifier = Modifier.fillMaxSize()
         )
-    }
-
-    open class SimpleSdpObserver : SdpObserver {
-        override fun onCreateSuccess(description: SessionDescription?) {
-            println("WebRTC-=error:::::Connected onCreateSuccess")
-        }
-
-        override fun onSetSuccess() {
-            println("WebRTC-=error:::::Connected onSetSuccess")
-        }
-
-        override fun onCreateFailure(error: String?) {
-            println("WebRTC-=error:::::Connected to onCreateFailure")
-        }
-
-        override fun onSetFailure(error: String?) {
-            println("WebRTC-=error:::::Connected to onSetFailure")
-        }
-    }
-
-    private fun startStreaming(whepUrl: String) {
-        println("WebRTC - Connecting to WHEP server: $whepUrl")
-
-        val request = Request.Builder().url(whepUrl).post("".toRequestBody()).build()
-        println("WebRTC - Connecting to request: $request")
-        val client = OkHttpClient()
-        println("WebRTC - Connecting to client: $client")
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                println("WebRTC - Error fetching SDP offer: ${e.message}")
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) {
-                    println("WebRTC - Failed to fetch SDP offer, code: ${response.code}")
-                    return
-                }
-
-                val responseBody = response.body?.string()
-                if (responseBody == null) {
-                    println("WebRTC - Received empty SDP offer")
-                    return
-                }
-
-                try {
-                    val json = JSONObject(responseBody)
-                    val sdp = json.getString("sdp")
-                    val remoteDescription = SessionDescription(SessionDescription.Type.OFFER, sdp)
-
-                    createPeerConnection()
-
-                    localPeer?.setRemoteDescription(SimpleSdpObserver(), remoteDescription)
-
-                    localPeer?.createAnswer(object : SimpleSdpObserver() {
-                        override fun onCreateSuccess(answer: SessionDescription?) {
-                            if (answer != null) {
-                                localPeer?.setLocalDescription(SimpleSdpObserver(), answer)
-
-                                // Send answer back to the server
-                                val answerJson = JSONObject().apply {
-                                    put("sdp", answer.description)
-                                    put("type", "answer")
-                                }
-
-                                val requestBody = answerJson.toString()
-                                    .toRequestBody("application/sdp".toMediaTypeOrNull())
-
-                                val answerRequest =
-                                    Request.Builder().url(whepUrl).post(requestBody).build()
-                                client.newCall(answerRequest).enqueue(object : Callback {
-                                    override fun onFailure(call: Call, e: IOException) {
-                                        println("WebRTC - Error sending answer: ${e.message}")
-                                    }
-
-                                    override fun onResponse(call: Call, response: Response) {
-                                        if (response.isSuccessful) {
-                                            println("WebRTC - Answer sent successfully")
-                                        } else {
-                                            println("WebRTC - Failed to send answer, code: ${response.code}")
-                                        }
-                                    }
-                                })
-                            }
-                        }
-                    }, MediaConstraints())
-
-                } catch (e: JSONException) {
-                    println("WebRTC - Error parsing SDP offer: ${e.message}")
-                }
-            }
-        })
-    }
-
-    private fun createPeerConnection() {
-        val options = PeerConnectionFactory.Options()
-        val peerConnectionFactory1 =
-            PeerConnectionFactory.builder().setOptions(options).createPeerConnectionFactory()
-
-        val videoSource = peerConnectionFactory1?.createVideoSource(false)
-        localVideoTrack = peerConnectionFactory1?.createVideoTrack("videoTrack", videoSource)
-
-
-        val rtcConfig = PeerConnection.RTCConfiguration(
-            listOf(
-                IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
-            )
-        )
-        try {
-            localPeer = peerConnectionFactory1?.createPeerConnection(
-                rtcConfig,
-                object : PeerConnection.Observer {
-                    override fun onIceCandidate(candidate: IceCandidate?) {
-                        if (candidate != null) {
-                            println("onIceCandidate not null")
-                        } else {
-                            println("onIceCandidate is null")
-                        }
-                    }
-
-                    override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {
-                        if (p0 != null) {
-                            println("onIceCandidatesRemoved not null")
-                        } else {
-
-                            println("onIceCandidatesRemoved is null")
-                        }
-                    }
-
-                    override fun onAddStream(stream: MediaStream?) {
-                        stream?.videoTracks?.forEach { videoTrack ->
-                            println("onAddStream: $videoTrack")
-                        }
-                    }
-
-                    override fun onRemoveStream(stream: MediaStream?) {
-                        if (stream != null) {
-                            println("onRemoveStream not null")
-                        } else {
-
-                            println("onRemoveStream is null")
-                        }
-                    }
-
-                    override fun onDataChannel(channel: DataChannel?) {
-                        if (channel != null) {
-                            println("onDataChannel not null")
-                        } else {
-                            println("onDataChannel is null")
-                        }
-                    }
-
-                    override fun onRenegotiationNeeded() {
-                        println("onRenegotiationNeeded:")
-                    }
-
-                    override fun onSignalingChange(p0: PeerConnection.SignalingState?) {
-                        if (p0 != null) {
-                            println("onSignalingChange not null")
-                        } else {
-
-                            println("onSignalingChange is null")
-                        }
-                    }
-
-                    override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {}
-                    override fun onIceConnectionReceivingChange(receiving: Boolean) {
-                        println("onIceConnectionReceivingChange:  $receiving")
-                    }
-
-                    override fun onIceGatheringChange(p0: PeerConnection.IceGatheringState?) {
-                        println("onIceGatheringChange:")
-                    }
-                },
-            )
-
-        } catch (e: Exception) {
-            Log.e("WebRTC", "Error creating PeerConnection: ${e.message}")
-        }
-
     }
 }
 
