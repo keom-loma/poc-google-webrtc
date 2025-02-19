@@ -22,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -31,24 +30,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.poc_google_webrtc.ui.theme.PocgooglewebrtcTheme
 import com.example.poc_google_webrtc.utils.CustomPeerConnectionObserver
-import com.example.poc_google_webrtc.utils.SignalingClient
 import com.example.poc_google_webrtc.utils.WebRTCManager
-import com.example.poc_google_webrtc.video_player.VideoPlayerScreen
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.HttpRequestTimeoutException
-import io.ktor.client.plugins.ResponseException
-import io.ktor.client.request.post
-import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
-import io.ktor.http.isSuccess
-import io.ktor.util.InternalAPI
-import io.socket.client.Socket
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -73,12 +55,9 @@ import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 import org.webrtc.SurfaceViewRenderer
 import org.webrtc.VideoTrack
-import java.net.MalformedURLException
-import java.net.URL
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var signalingClient: SignalingClient
     private lateinit var webRTCManager: WebRTCManager
 
     private lateinit var eglBase: EglBase
@@ -91,17 +70,9 @@ class MainActivity : ComponentActivity() {
     )
 
 
-    private val keyStreamId: String = "livestream"
-    private val serverUrl: String = "wss://your-signaling-server.com"
-
-
-    private var peerConnectionFactory2: PeerConnectionFactory? = null
     private var localPeer: PeerConnection? = null
-    private var videoView: SurfaceViewRenderer? = null
 
     private var localVideoTrack: VideoTrack? = null
-
-    private var signalingSocket: Socket? = null
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -109,63 +80,42 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        /*signalingClient = SignalingClient(
-            serverUrl = serverUrl,
-            keyStreamId = keyStreamId
-        ) { message ->
-            webRTCManager.handleReceivedMessage(message)
-        }
-        eglBase = EglBase.create()
-
-        signalingClient.connectJanusServer()
-
-        webRTCManager = WebRTCManager(context = this)
-        surfaceViewRenderer = SurfaceViewRenderer(this).apply {
-            init(eglBase.eglBaseContext, null)
-        }*/
-
-
-        /*surfaceViewRenderer.setMirror(true)
-        surfaceViewRenderer.setEnableHardwareScaler(true)
-        window.statusBarColor = android.graphics.Color.WHITE*/
-        // Set status bar icons to dark
         val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
         windowInsetsController.isAppearanceLightStatusBars = true // Dark icons
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         setContent {
             PocgooglewebrtcTheme {
-
-               /* MainScreen(
+                MainScreen(
                     modifier = Modifier
                         .systemBarsPadding(),
                     context = this@MainActivity
-                )*/
+                )
 
-                Box(
+                /* Box(
                      modifier = Modifier
                          .fillMaxSize()
                          .systemBarsPadding()
                          .background(color = Color.Red),
                      contentAlignment = Alignment.Center
                  ) {
-
                      Text("Center Content")
-                 }
+                 }*/
             }
         }
 
 
-
-        // startStreaming(whepUrl = "https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888")
-        startStreaming(whepUrl = "http://local.mystream.test:8099/rtc/v1/whep/?app=live&stream=livestream")
+        //  startStreaming(whepUrl = "https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888")
+        //  startStreaming(whepUrl = "http://local.mystream.test:8099/rtc/v1/whep/?app=live&stream=livestream")
     }
 
     private fun startStreaming(whepUrl: String) {
         println("WebRTC - Connecting to WHEP server: $whepUrl")
 
         val request = Request.Builder().url(whepUrl).post("".toRequestBody()).build()
+        println("WebRTC - Connecting to request: $request")
         val client = OkHttpClient()
+        println("WebRTC - Connecting to client: $client")
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -234,59 +184,9 @@ class MainActivity : ComponentActivity() {
     }
 
 
-    /* private fun startStreaming(whepUrl: String) {
-         println("WebRTC-=-=-=-=-=Connected to signaling server: $whepUrl")
-         try {
-             // Establish signaling connection
-             signalingSocket = IO.socket(whepUrl)
-
-             signalingSocket?.on(Socket.EVENT_CONNECT) {
-                 println("WebRTC-=-=-=-=-=Connected to signaling server connected")
-             }
-
-             // Handle the offer from the server
-             signalingSocket?.on("offer") { args ->
-                 Log.d("WebRTC", "Received offer from signaling server: $args")
-                 val offer = args[0] as JSONObject
-                 val sdp = offer.getString("sdp")
-                 val sessionDescription = SessionDescription(SessionDescription.Type.OFFER, sdp)
-
-                 // Set the remote description (server offer)
-                 peerConnection?.setRemoteDescription(SimpleSdpObserver(), sessionDescription)
-
-                 // Answer back with an answer
-                 val answer = SessionDescription(SessionDescription.Type.ANSWER, "remote_sdp_here")
-                 peerConnection?.setLocalDescription(SimpleSdpObserver(), answer)
-
-                 // Send the answer back to the signaling server
-                 signalingSocket?.emit("answer", answer)
-             }
-
-             // Handle ICE candidates
-             signalingSocket?.on("candidate") { args ->
-                 val candidate = args[0] as JSONObject
-                 val iceCandidate = IceCandidate(
-                     candidate.getString("id"),
-                     candidate.getInt("label"),
-                     candidate.getString("candidate")
-                 )
-                 peerConnection?.addIceCandidate(iceCandidate)
-             }
-
-             // Start the connection
-             signalingSocket?.connect()
-             createPeerConnection()
-
-         } catch (e: Exception) {
-             e.printStackTrace()
-             println("WebRTC-=error:::::Connected to signaling server")
-         }
-     }*/
-
     private fun createPeerConnection() {
-
         val options = PeerConnectionFactory.Options()
-        val  peerConnectionFactory1 =
+        val peerConnectionFactory1 =
             PeerConnectionFactory.builder().setOptions(options).createPeerConnectionFactory()
 
         val videoSource = peerConnectionFactory1?.createVideoSource(false)
@@ -321,6 +221,9 @@ class MainActivity : ComponentActivity() {
 
                     override fun onAddStream(stream: MediaStream?) {
                         stream?.videoTracks?.forEach { videoTrack ->
+                            if (videoTrack != null) {
+                                remoteRenderer = videoTrack
+                            }
                             println("onAddStream: $videoTrack")
                         }
                     }
@@ -369,101 +272,8 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.e("WebRTC", "Error creating PeerConnection: ${e.message}")
         }
-        val result = localPeer?.iceConnectionState()
 
-        if (localPeer != null) {
-
-        } else {
-
-        }
     }
-
-
-    private fun startWebRTC(streamUrl: String) {
-        GlobalScope.launch(Dispatchers.IO) {
-            val sdpOffer = createOffer()
-            val sdpAnswer = sendOfferToServer(streamUrl, sdpOffer.toString())
-            // establishPeerConnection(sdpAnswer.toString())
-        }
-    }
-
-    @Throws(ResponseException::class)
-    @OptIn(InternalAPI::class)
-    private suspend fun sendOfferToServer(streamUrl: String, sdp: String): String {
-        println("Establishing peer connection with stream URL: $streamUrl and SDP: $sdp")
-
-        // Validate the URL format
-        try {
-            URL(streamUrl)  // Will throw an exception if the URL is malformed
-        } catch (e: MalformedURLException) {
-            throw IllegalArgumentException("Invalid stream URL: $streamUrl", e)
-        }
-
-        // Initialize HttpClient
-        val client = HttpClient(CIO)
-
-        try {
-            println("Sending offer to server: $streamUrl")
-            println("Request body: {\"sdp\": \"$sdp\", \"type\": \"offer\"}")
-
-            val response: HttpResponse = client.post(streamUrl) {
-                contentType(ContentType.Application.Json)
-                body = """{"sdp": "$sdp", "type": "offer"}"""
-            }
-            /*val client = HttpClient(CIO) {
-            engine {
-                https {
-                    // Use a custom SSLContext with hostname verification
-                    sslContext = SSLContext.getInstance("TLS")
-                    sslContext.init(null, arrayOf<TrustManager>(object : X509TrustManager {
-                        override fun getAcceptedIssuers(): Array<X509Certificate>? = null
-                        override fun checkClientTrusted(certificates: Array<X509Certificate>, authType: String?) {}
-                        override fun checkServerTrusted(certificates: Array<X509Certificate>, authType: String?) {
-                            // Add your custom certificate validation logic if needed
-                            // Here we let the client check the certificate correctly with hostname
-                        }
-                    }), java.security.SecureRandom())
-
-                    hostnameVerifier = HostnameVerifier { hostname, session ->
-                        HttpsURLConnection.getDefaultHostnameVerifier().verify(hostname, session)
-                    }
-                }
-            }
-        }*/
-            // Check if response status is OK
-            if (response.status.isSuccess()) {
-                println("Offer sent successfully!")
-                return response.bodyAsText() // Return the response text (typically an SDP answer or result)
-            } else {
-                println("Request failed with status: ${response.status}")
-                throw Exception("Failed to send offer, server responded with status: ${response.status}")
-            }
-        } catch (e: HttpRequestTimeoutException) {
-            println("Request timed out while sending offer: ${e.message}")
-            throw e // Handle timeout error
-        } catch (e: ResponseException) {
-            println("Request failed: ${e.message}")
-            throw e // Handle other types of response errors
-        } catch (e: Exception) {
-            println("Unexpected error occurred: ${e.message}")
-            throw e
-        } finally {
-            // Close the HttpClient to release resources
-            client.close()
-        }
-    }
-
-
-    /* private fun establishPeerConnection(sdpAnswer: String) {
-     println("establishPeerConnection sdpAnswer: $sdpAnswer")
-     val answer = SessionDescription(SessionDescription.Type.ANSWER, sdpAnswer)
-     peerConnection?.setRemoteDescription(object : SdpObserver {
-         override fun onSetSuccess() {}
-         override fun onSetFailure(error: String?) {}
-         override fun onCreateSuccess(sdp: SessionDescription?) {}
-         override fun onCreateFailure(error: String?) {}
-     }, answer)
- }*/
 
     private fun createOffer() {
         val peerConnectionFactory = PeerConnectionFactory.builder()
@@ -507,7 +317,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun MainScreen(modifier: Modifier = Modifier, context: Context, ) {
+    fun MainScreen(modifier: Modifier = Modifier, context: Context) {
         var streamUrl by remember { mutableStateOf("https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888") }
         var isPlaying by remember { mutableStateOf(false) }
         Column(
@@ -526,7 +336,8 @@ class MainActivity : ComponentActivity() {
             Button(
                 onClick = {
                     isPlaying = true
-                    startWebRTC(streamUrl)
+                    startStreaming(streamUrl)
+                    // startWebRTC(streamUrl)
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -538,7 +349,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            color = Color.Red
+                            color = Color.Transparent
+                        )
+                        .padding(
+                            bottom = 50.dp
                         )
                 ) {
                     AndroidView(
@@ -548,7 +362,8 @@ class MainActivity : ComponentActivity() {
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
-                                webRTCManager.remoteSurfaceViewRenderer = this
+                                remoteRenderer
+                                //  webRTCManager.remoteSurfaceViewRenderer = this
                             }
                         }, modifier = Modifier.fillMaxSize()
                     )
