@@ -11,7 +11,7 @@
 ## Installation
 #### Since we are using an AAR file for the WebRTC SDK, follow these steps to install it manually:
 
-  #### ✨ Place the webrtc.aar file inside the libs folder of your project.
+  #### ✨ Place the libwebrtc.aar file inside the libs folder of your project.
   #### ✨ Modify the build.gradle (Module: app) to include the AAR file.
   #### ✨ Sync the project to apply changes.
 
