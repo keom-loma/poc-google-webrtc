@@ -12,7 +12,7 @@
    #### Url for streaming:
    - https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888
 
-   ## Web Reference:
+   ## Web Player Reference:
    - https://github.com/Eyevinn/webrtc-player
 
 
