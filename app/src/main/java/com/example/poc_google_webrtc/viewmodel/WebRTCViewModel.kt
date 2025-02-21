@@ -2,6 +2,7 @@ package com.example.poc_google_webrtc.viewmodel
 
 import android.app.Application
 import android.util.Log
+import androidx.compose.runtime.remember
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.poc_google_webrtc.utils.StringConstance
@@ -133,6 +134,7 @@ class WebRTCViewModel(application: Application):AndroidViewModel(application) {
     // 4 Handles the server's response:
     //  If successful, extracts the SDP answer from the response and sets it as the remote description.
     //  If failed, logs an error message with the exception details.
+
     fun sendOfferToServer(sdp: SessionDescription) {
         val client = OkHttpClient()
         val request = Request.Builder().url(streamUrl)
@@ -170,6 +172,7 @@ class WebRTCViewModel(application: Application):AndroidViewModel(application) {
     // rearranges the order of audio and video media lines in a Session Description Protocol (SDP) string.
     // Specifically, it ensures that the video line comes before the audio line, if both are present.
     // This is done to conform to the WebRTC standard, which requires video to be listed before audio in the SDP.
+
     private fun fixMLineOrder(sdp: String): String {
         val lines = sdp.split("\n").toMutableList()
         val mLines = lines.filter { it.startsWith("m=") }
@@ -185,5 +188,8 @@ class WebRTCViewModel(application: Application):AndroidViewModel(application) {
         }
         return lines.joinToString("\n")
     }
-
+    fun onStopStream() {
+        peerConnection?.close()
+        peerConnection = null
+    }
 }

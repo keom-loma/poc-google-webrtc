@@ -27,7 +27,6 @@ import org.webrtc.RendererCommon
 import org.webrtc.SurfaceViewRenderer
 
 
-
 /**
  * @Author: Jupyter.
  * @Date: 2/20/25.
@@ -36,6 +35,7 @@ import org.webrtc.SurfaceViewRenderer
 
 @Composable
 fun MainScreen(viewModel: WebRTCViewModel = viewModel()) {
+    var isStopStream by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var surfaceViewRenderer by remember { mutableStateOf<SurfaceViewRenderer?>(null) }
 
@@ -65,14 +65,24 @@ fun MainScreen(viewModel: WebRTCViewModel = viewModel()) {
         }
 
         Button(
+
             onClick = {
-                viewModel.generateSdpOffer { sdp ->
-                    viewModel.sendOfferToServer(sdp)
+                isStopStream = !isStopStream
+                if (isStopStream) {
+                    viewModel.onStopStream()
+                } else {
+                    viewModel.generateSdpOffer { sdp ->
+                        viewModel.sendOfferToServer(sdp)
+                    }
                 }
+
             },
             modifier = Modifier.padding(top = 20.dp)
         ) {
-            Text(text = "Start Stream")
+            Text(
+                text = if (isStopStream) "Stop Streaming" else "Start Streaming",
+                color = if (isStopStream) Color.Red else Color.Green,
+            )
         }
     }
 }
