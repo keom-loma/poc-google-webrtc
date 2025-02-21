@@ -9,15 +9,12 @@
    ### ⚡ Internet permission in AndroidManifast.xml
    ### ⚡ Setup SRS Server
 
-   #### Url for streaming:
-   - https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888
-
+   
    ## Web Player Reference:
    - https://github.com/Eyevinn/webrtc-player
 
 
 
-   
 
 ## Installation
 #### Since we are using an AAR file for the WebRTC SDK, follow these steps to install it manually:
