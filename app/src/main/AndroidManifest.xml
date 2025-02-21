@@ -28,7 +28,7 @@
         android:theme="@style/Theme.Pocgooglewebrtc"
         tools:targetApi="31">
         <activity
-            android:name=".MainActivity1"
+            android:name=".MainActivity2"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.Pocgooglewebrtc">
