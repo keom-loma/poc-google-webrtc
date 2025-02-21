@@ -1,5 +1,6 @@
 package com.example.poc_google_webrtc
 
+import android.content.res.Resources
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -36,24 +37,24 @@ import java.io.IOException
  * @Date: 2/21/25.
  * @Email: koemheang200@gmail.com.
  */
-class MainActivity2: ComponentActivity() {
+class MainActivity2 : ComponentActivity() {
+
+    companion object {
+        const val VIDEO_WIDTH = 1280
+        const val VIDEO_HEIGHT = 720
+        var streamUrl =
+            "https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888"
+    }
 
     private var peerConnection: PeerConnection? = null
     private var remoteRenderer: VideoTrack? = null
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private val eglBaseContext = EglBase.create().eglBaseContext
     private val options = PeerConnectionFactory.Options()
-
-
     private val iceServers = listOf(
         IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
     )
-
-    companion object {
-        var streamUrl =
-            "https://oryx.lomasq.com/rtc/v1/whep/?app=live&stream=livestream&eip=91.108.105.153:8888"
-    }
-
+    private lateinit var surfaceViewRenderer: SurfaceViewRenderer
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,9 +69,9 @@ class MainActivity2: ComponentActivity() {
 
         val btnStream: Button = findViewById(R.id.connectSever)
         val btnStop: Button = findViewById(R.id.stopServer)
-        val surfaceViewRenderer: SurfaceViewRenderer = findViewById(R.id.surface_view2)
+        surfaceViewRenderer = findViewById(R.id.surface_view2)
 
-        initializeSurfaceView(surfaceViewRenderer)
+        initializeSurfaceView()
 
         initializePeerConnectionFactory()
 
@@ -87,30 +88,38 @@ class MainActivity2: ComponentActivity() {
         }
     }
 
-    private fun initializeSurfaceView(surfaceView: SurfaceViewRenderer) {
-        surfaceView.init(eglBaseContext, null)
-        surfaceView.setMirror(true)
-        surfaceView.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
-        surfaceView.setEnableHardwareScaler(true)
-        surfaceView.setZOrderMediaOverlay(true)
+    private fun initializeSurfaceView() {
+        val displayMetrics = Resources.getSystem().displayMetrics
+        val screenWidth = displayMetrics.widthPixels
 
+        val adjustedHeight = (screenWidth.toFloat() / VIDEO_WIDTH) * VIDEO_HEIGHT
+
+        val layoutParams = surfaceViewRenderer.layoutParams
+        layoutParams.width = screenWidth
+        layoutParams.height = adjustedHeight.toInt()
+        surfaceViewRenderer.layoutParams = layoutParams
+        surfaceViewRenderer.apply {
+            init(eglBaseContext, null)
+            setMirror(false)
+            setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
+            setEnableHardwareScaler(true)
+            requestLayout()
+        }
     }
 
     private fun initializePeerConnectionFactory() {
-        // Initialize WebRTC PeerConnectionFactory
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(applicationContext)
                 .setFieldTrials("WebRTC-H264HighProfile/Enabled/")
                 .createInitializationOptions()
         )
-
-        // Create PeerConnectionFactory once initialization is done
         peerConnectionFactory = PeerConnectionFactory.builder()
             .setOptions(options)
             .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBaseContext))
             .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBaseContext, true, true))
             .createPeerConnectionFactory()
     }
+
     private fun generateSdpOffer() {
         if (peerConnectionFactory == null) {
             return
@@ -120,36 +129,40 @@ class MainActivity2: ComponentActivity() {
             mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
         }
 
-        val config = PeerConnection.RTCConfiguration(iceServers)
-
-        // Initialize the PeerConnection
         peerConnection =
-            peerConnectionFactory?.createPeerConnection(config, object : PeerConnection.Observer {
-                override fun onIceCandidate(candidate: IceCandidate?) {}
-                override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {}
+            peerConnectionFactory?.createPeerConnection(
+                PeerConnection.RTCConfiguration(iceServers),
+                object : PeerConnection.Observer {
+                    override fun onIceCandidate(candidate: IceCandidate?) {}
+                    override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {}
 
-                override fun onAddStream(stream: MediaStream?) {
-                    stream?.let { mediaStream ->
-                        if (mediaStream.videoTracks.isNotEmpty()) {
-                            val remoteTrack = mediaStream.videoTracks[0]
-                            remoteRenderer = remoteTrack
-                            runOnUiThread {
-                                remoteRenderer?.addSink(findViewById<SurfaceViewRenderer>(R.id.surface_view2))
+                    override fun onAddStream(stream: MediaStream?) {
+                        stream?.let { mediaStream ->
+                            if (mediaStream.videoTracks.isNotEmpty()) {
+                                val remoteTrack = mediaStream.videoTracks[0]
+                                remoteTrack.addSink { frame ->
+                                    Log.d(
+                                        "VideoFrame",
+                                        "Width: ${frame.buffer.width}, Height: ${frame.buffer.height}"
+                                    )
+                                }
+                                remoteRenderer = remoteTrack
+                                runOnUiThread {
+                                    remoteRenderer?.addSink(surfaceViewRenderer)
+                                }
                             }
-
                         }
                     }
-                }
 
-                override fun onRemoveStream(stream: MediaStream?) {}
-                override fun onDataChannel(channel: DataChannel?) {}
-                override fun onRenegotiationNeeded() {}
-                override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {}
-                override fun onIceConnectionReceivingChange(p0: Boolean) {}
+                    override fun onRemoveStream(stream: MediaStream?) {}
+                    override fun onDataChannel(channel: DataChannel?) {}
+                    override fun onRenegotiationNeeded() {}
+                    override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {}
+                    override fun onIceConnectionReceivingChange(p0: Boolean) {}
 
-                override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState?) {}
-                override fun onSignalingChange(newState: PeerConnection.SignalingState?) {}
-            })
+                    override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState?) {}
+                    override fun onSignalingChange(newState: PeerConnection.SignalingState?) {}
+                })
 
 
         // Create SDP offer
@@ -221,6 +234,7 @@ class MainActivity2: ComponentActivity() {
             }, sessionDescription)
         } ?: Log.e("SDP Answer", "PeerConnection is null!")
     }
+
     // Function to fix the order of m-lines in SDP
     private fun fixMLineOrder(sdp: String): String {
         val lines = sdp.split("\n").toMutableList()
@@ -240,7 +254,7 @@ class MainActivity2: ComponentActivity() {
         return result
     }
 
-    private fun stopStream(){
+    private fun stopStream() {
         peerConnection?.close()
         peerConnection = null
     }
