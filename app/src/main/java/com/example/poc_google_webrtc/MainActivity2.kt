@@ -3,7 +3,9 @@ package com.example.poc_google_webrtc
 import android.content.res.Resources
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.Button
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.WindowCompat
@@ -20,6 +22,7 @@ import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.EglBase
 import org.webrtc.IceCandidate
+import org.webrtc.Logging
 import org.webrtc.MediaConstraints
 import org.webrtc.MediaStream
 import org.webrtc.PeerConnection
@@ -51,6 +54,9 @@ class MainActivity2 : ComponentActivity() {
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private val eglBaseContext = EglBase.create().eglBaseContext
     private val options = PeerConnectionFactory.Options()
+
+    private val videoTrack: VideoTrack? = null
+
     private val iceServers = listOf(
         IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
     )
@@ -63,27 +69,32 @@ class MainActivity2 : ComponentActivity() {
 
         setContentView(R.layout.activity_main2)
 
-        val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
-        windowInsetsController.isAppearanceLightStatusBars = true // Dark icons
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-
         val btnStream: Button = findViewById(R.id.connectSever)
         val btnStop: Button = findViewById(R.id.stopServer)
+        val noStreamImage: View = findViewById(R.id.no_stream_image)
+        val imageWrapper: FrameLayout = findViewById(R.id.image_wrapper)
+        val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
+        windowInsetsController.isAppearanceLightStatusBars = true
+
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         surfaceViewRenderer = findViewById(R.id.surface_view2)
 
+        initializePeerConnectionFactory()
         initializeSurfaceView()
 
-        initializePeerConnectionFactory()
 
         btnStream.setOnClickListener {
             btnStream.visibility = Button.GONE
             btnStop.visibility = Button.VISIBLE
+            noStreamImage.visibility = View.GONE
+            imageWrapper.visibility = View.GONE
             generateSdpOffer()
         }
         btnStop.setOnClickListener {
-            println("stopStream")
-            btnStop.visibility = Button.GONE
             btnStream.visibility = Button.VISIBLE
+            btnStop.visibility = Button.GONE
+            noStreamImage.visibility = View.VISIBLE
+            imageWrapper.visibility = View.VISIBLE
             stopStream()
         }
     }
@@ -112,9 +123,9 @@ class MainActivity2 : ComponentActivity() {
             PeerConnectionFactory.InitializationOptions.builder(applicationContext)
                 .setFieldTrials("WebRTC-H264HighProfile/Enabled/")
                 .createInitializationOptions()
+
         )
-        peerConnectionFactory = PeerConnectionFactory.builder()
-            .setOptions(options)
+        peerConnectionFactory = PeerConnectionFactory.builder().setOptions(options)
             .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBaseContext))
             .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBaseContext, true, true))
             .createPeerConnectionFactory()
@@ -129,40 +140,50 @@ class MainActivity2 : ComponentActivity() {
             mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
         }
 
-        peerConnection =
-            peerConnectionFactory?.createPeerConnection(
-                PeerConnection.RTCConfiguration(iceServers),
-                object : PeerConnection.Observer {
-                    override fun onIceCandidate(candidate: IceCandidate?) {}
-                    override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {}
+        peerConnection = peerConnectionFactory?.createPeerConnection(
+            PeerConnection.RTCConfiguration(iceServers),
+            object : PeerConnection.Observer {
+                override fun onIceCandidate(candidate: IceCandidate?) {}
+                override fun onIceCandidatesRemoved(p0: Array<out IceCandidate>?) {}
 
-                    override fun onAddStream(stream: MediaStream?) {
-                        stream?.let { mediaStream ->
-                            if (mediaStream.videoTracks.isNotEmpty()) {
-                                val remoteTrack = mediaStream.videoTracks[0]
-                                remoteTrack.addSink { frame ->
-                                    Log.d(
-                                        "VideoFrame",
-                                        "Width: ${frame.buffer.width}, Height: ${frame.buffer.height}"
-                                    )
-                                }
-                                remoteRenderer = remoteTrack
-                                runOnUiThread {
-                                    remoteRenderer?.addSink(surfaceViewRenderer)
-                                }
+                override fun onAddStream(stream: MediaStream?) {
+                    stream?.let { mediaStream ->
+                        if (mediaStream.videoTracks.isNotEmpty()) {
+                            val remoteTrack = mediaStream.videoTracks[0]
+                            remoteTrack.addSink { frame ->
+                                Log.d(
+                                    "VideoFrame",
+                                    "Width: ${frame.buffer.width}, Height: ${frame.buffer.height}"
+                                )
+
                             }
+
+                            remoteRenderer = remoteTrack
+
+                            runOnUiThread {
+                                remoteRenderer?.addSink(surfaceViewRenderer)
+                            }
+                        } else {
+                            Log.d(
+                                "VideoFrame", "Else condition of addTrackVideo"
+                            )
                         }
+                    } ?: run {
+                        Log.d(
+                            "VideoFrame", "Else condition of run... block onAddVideo"
+                        )
                     }
+                }
 
-                    override fun onRemoveStream(stream: MediaStream?) {}
-                    override fun onDataChannel(channel: DataChannel?) {}
-                    override fun onRenegotiationNeeded() {}
-                    override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {}
-                    override fun onIceConnectionReceivingChange(p0: Boolean) {}
+                override fun onRemoveStream(stream: MediaStream?) {}
+                override fun onDataChannel(channel: DataChannel?) {}
+                override fun onRenegotiationNeeded() {}
+                override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {}
+                override fun onIceConnectionReceivingChange(p0: Boolean) {}
 
-                    override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState?) {}
-                    override fun onSignalingChange(newState: PeerConnection.SignalingState?) {}
-                })
+                override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState?) {}
+                override fun onSignalingChange(newState: PeerConnection.SignalingState?) {}
+            })
 
 
         // Create SDP offer

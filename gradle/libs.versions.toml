@@ -1,6 +1,7 @@
 [versions]
 agp = "8.7.3"
 atomicfu = "0.21.0"
+constraintlayoutVersion = "2.1.4"
 exoplayer = "2.19.1"
 kotlin = "2.0.0"
 coreKtx = "1.15.0"
@@ -29,6 +30,7 @@ socketIoClient = "2.1.1"
 constraintlayout = "2.2.0"
 
 [libraries]
+androidx-constraintlayout-v214 = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayoutVersion" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycleRuntimeKtx" }
 androidx-media3-exoplayer-v111 = { module = "androidx.media3:media3-exoplayer", version.ref = "media3ExoplayerVersion" }

@@ -65,6 +65,7 @@ dependencies {
     implementation (libs.ktor.client.json)
     implementation (libs.ktor.client.serialization)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.constraintlayout.v214)
 
 
     implementation(libs.okhttp)
