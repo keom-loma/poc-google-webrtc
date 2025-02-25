@@ -175,8 +175,12 @@ class MainActivity2 : ComponentActivity() {
                     }
                 }
 
-                override fun onRemoveStream(stream: MediaStream?) {}
-                override fun onDataChannel(channel: DataChannel?) {}
+                override fun onRemoveStream(stream: MediaStream?) {
+                    println("onRemoveStream: ${stream?.videoTracks}")
+                }
+                override fun onDataChannel(channel: DataChannel?) {
+                    println("onDataChannel: $channel")
+                }
                 override fun onRenegotiationNeeded() {}
                 override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {}
                 override fun onIceConnectionReceivingChange(p0: Boolean) {}
